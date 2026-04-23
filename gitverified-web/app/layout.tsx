@@ -7,7 +7,7 @@ const playfair = Playfair_Display({ subsets: ["latin"], variable: '--font-playfa
 
 export const metadata: Metadata = {
   title: "GitVerified - The 100% Honest Resume Filter",
-  description: "Verify candidates with CodeRabbit & Oumi.",
+  description: "Verify candidates with CodeRabbit & GitVerified.",
 };
 
 export default function RootLayout({

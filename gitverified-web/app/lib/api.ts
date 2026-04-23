@@ -40,13 +40,12 @@ export interface EvaluationResult {
 export interface SystemStatus {
     backend: boolean;
     ollama: boolean;
-    kestra: boolean;
     models: string[];
     ready: boolean;
 }
 
 /**
- * Check system status (backend, Ollama, Kestra)
+ * Check system status (backend, Ollama)
  */
 export async function getSystemStatus(): Promise<SystemStatus> {
     try {
@@ -57,7 +56,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
     } catch (error) {
         console.error('Status check failed:', error);
     }
-    return { backend: false, ollama: false, kestra: false, models: [], ready: false };
+    return { backend: false, ollama: false, models: [], ready: false };
 }
 
 /**

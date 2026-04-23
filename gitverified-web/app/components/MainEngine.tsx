@@ -116,7 +116,7 @@ export default function MainEngine() {
     setIsEvaluating(true);
     setIsComplete(false);
     setEvaluationResult(null);
-    setConsoleOutput([`> Initializing CandidateAI Engine (LOCAL MODE)...`]);
+    setConsoleOutput([`> Initializing GitVerified Engine (LOCAL MODE)...`]);
     setConsoleOutput(prev => [...prev, `> Using Ollama for AI analysis...`]);
 
     if (mode === 'single') {

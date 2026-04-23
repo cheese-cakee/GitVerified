@@ -32,7 +32,7 @@ export default function UploadPage() {
         // Simulate upload delay
         setTimeout(() => {
             setUploading(false);
-            alert(`Successfully uploaded ${files.length} resumes to Kestra Batch #005`);
+            alert(`Successfully uploaded ${files.length} resumes to batch processing`);
             setFiles([]);
         }, 2000);
     };

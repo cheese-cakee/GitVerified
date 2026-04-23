@@ -8,8 +8,8 @@ export default function Footer() {
         {/* Brand Column */}
         <div className="col-span-2 lg:col-span-2 space-y-4">
           <Link href="/" className="flex items-baseline gap-1 group mb-4">
-            <span className="font-serif italic text-2xl text-white font-normal">Git</span>
-            <span className="font-sans font-bold text-xl text-white tracking-tight">Verified</span>
+            <span className="font-serif italic text-2xl text-white font-normal">Candidate</span>
+            <span className="font-sans font-bold text-xl text-white tracking-tight">AI</span>
           </Link>
           <h3 className="text-3xl font-bold text-white tracking-tight leading-tight">
              AI-powered candidate verification <br /> that just works.
