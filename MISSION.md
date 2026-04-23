@@ -1,4 +1,4 @@
-# CandidateAI Mission
+# GitVerified Mission
 
 ## 🎯 Our Vision
 
@@ -80,7 +80,7 @@
 ## 🌍 Impact Vision
 
 ### Short Term (1-2 years)
-- **1000+ companies** using CandidateAI for free
+- **1000+ companies** using GitVerified for free
 - **100,000+ candidates** evaluated with privacy protection
 - **Active community** contributing evaluation improvements
 - **Industry recognition** for local AI innovation

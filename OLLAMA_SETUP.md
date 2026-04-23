@@ -9,8 +9,7 @@ set PATH=%PATH%;C:\Users\lenovo\AppData\Local\Programs\Ollama\bin;%PATH%
 ollama list
 
 # Download models (if needed)
-ollama pull qwen2:1.5b
-ollama pull tinyllama
+ollama pull qwen3.5:4b
 ```
 
 ## **Method 2: Direct Path Usage**
@@ -41,7 +40,7 @@ curl http://localhost:11434/api/tags
 # Test model generation
 curl -X POST http://localhost:11434/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"model": "qwen2:1.5b", "prompt": "test message", "stream": false}'
+  -d '{"model": "qwen3.5:4b", "prompt": "test message", "stream": false}'
 ```
 
 ## **Once Working:**
@@ -56,19 +55,13 @@ docker-compose -f docker-compose.simple.yml up -d
 curl http://localhost:11434/api/tags
 
 # 3. Upload resume via web interface
-open http://localhost:3000
-
-# 4. Enable AI in Kestra flow
-# Go to http://localhost:8081
-# Flow: candidate-evaluation-enhanced
-# Set: use_ai_models = true
+open http://localhost:3000/engine
 ```
 
 ## **Expected Result:**
-- ✅ **Ollama models**: qwen2:1.5b + tinyllama loaded
+- ✅ **Ollama model**: qwen3.5:4b loaded
 - ✅ **85%+ accuracy**: AI-powered analysis
-- ✅ **Production features**: Kestra + Docker orchestration
-- ✅ **Parallel processing**: 5x faster evaluations
+- ✅ **Simple architecture**: Python backend + Next.js frontend
 - ✅ **Complete privacy**: 100% local data
 
-**Your system will have the BEST of both worlds!** 🎯
+**Your system is ready for candidate evaluation!** 🎯

@@ -9,4 +9,4 @@ All notable changes to this project will be documented in this file.
 - **Global**: Massive codebase update enforcing local version as source of truth.
 - **Backend**: Enhanced agent implementations (integrity, uniqueness, relevance).
 - **Frontend**: Updated MainEngine and dashboard components.
-- **Orchestration**: Refined Kestra flows for candidate evaluation.
+- **Orchestration**: Removed Kestra - now using lightweight queue-based processing.
