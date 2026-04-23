@@ -4,8 +4,8 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Copy requirements and install basic deps only
-COPY requirements.hybrid.txt .
-RUN pip install --no-cache-dir -r requirements.hybrid.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy agents
 COPY agents/ /app/agents/
@@ -21,4 +21,4 @@ ENV REDIS_URL=redis://redis:6379
 RUN python -c "from agents.integrity import scan_resume_integrity; print('Agent OK')" || echo "Agent ready"
 
 # Default command
-CMD ["python", "-c", "print('CandidateAI Agents Ready')"]
+CMD ["python", "-c", "print('GitVerified Agents Ready')"]

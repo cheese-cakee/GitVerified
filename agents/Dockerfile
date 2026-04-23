@@ -1,4 +1,4 @@
-# CandidateAI Agents Dockerfile
+# GitVerified Agents Dockerfile
 # Optimized for quantized models and laptop deployment
 
 FROM python:3.9-slim
@@ -17,7 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Install quantized model dependencies
 RUN pip install --no-cache-dir \
-    kestra \
     pymupdf \
     requests \
     redis \
@@ -50,5 +49,5 @@ RUN python -c "from agents.integrity import scan_resume_integrity; print('Integr
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import sys; sys.path.append('/app/agents'); from integrity import scan_resume_integrity; print('OK')" || exit 1
 
-# Default command (can be overridden by Kestra)
-CMD ["python", "-c", "print('CandidateAI Agents Ready')"]
+# Default command
+CMD ["python", "-c", "print('GitVerified Agents Ready')"]
