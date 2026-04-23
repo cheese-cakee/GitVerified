@@ -1,7 +1,7 @@
 @echo off
 echo.
 echo ========================================
-echo   CandidateAI - Local AI Evaluation
+echo   GitVerified - Local AI Evaluation
 echo   100%% Free, 100%% Private
 echo ========================================
 echo.
