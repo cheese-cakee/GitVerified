@@ -1,4 +1,4 @@
-# CandidateAI - Local AI-Powered Candidate Evaluation
+# GitVerified - Local AI-Powered Candidate Evaluation
 
 **100% Free. 100% Private. 100% Local.**
 
@@ -19,7 +19,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ### 2. Download AI Model
 
 ```bash
-ollama pull qwen2.5-coder:14b
+ollama pull qwen3.5:4b
 ```
 
 ### 3. Start Backend
@@ -56,7 +56,7 @@ Backend (Python :3001)
     └── Relevance Agent
          │
          ▼
-    Ollama (qwen2:1.5b :11434)
+     Ollama (qwen3.5:4b :11434)
 ```
 
 ## 📊 What Gets Evaluated
@@ -73,16 +73,7 @@ Backend (Python :3001)
 | Solution         | Cost           | Privacy           |
 | ---------------- | -------------- | ----------------- |
 | Traditional SaaS | $0.10+/eval    | ❌ Data shared    |
-| **CandidateAI**  | **$0 forever** | ✅ **100% local** |
-
-## 🔧 Optional: Kestra Workflows
-
-For parallel processing of multiple candidates:
-
-```bash
-docker-compose -f docker-compose.hybrid.yml up -d
-# Access Kestra UI: http://localhost:8080
-```
+| **GitVerified**  | **$0 forever** | ✅ **100% local** |
 
 ## 📁 Project Structure
 
@@ -96,9 +87,8 @@ candidateai/
 │   ├── uniqueness.py
 │   └── relevance.py
 ├── gitverified-web/      # Next.js frontend
-├── flows/                # Kestra workflows
 ├── start.bat             # Windows quick start
-└── docker-compose.hybrid.yml
+└── docker-compose.simple.yml
 ```
 
 ## 📄 License
