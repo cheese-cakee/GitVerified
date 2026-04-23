@@ -29,7 +29,7 @@ This directory contains sample resumes for demonstration purposes:
 Resume Score: 92/100
 Integrity Score: 100/100 (CLEAN)
 Algo Score: 85/100 (Steady growth)
-Oumi Score: 8.7/10 (Highly unique project)
+AI Uniqueness Score: 8.7/10 (Highly unique project)
 Sentinel Score: 95/100 (Good code quality)
 Relevance Score: 88/100 (Strong match)
 Final Verdict: HIGH POTENTIAL - Recommend interview
@@ -40,7 +40,7 @@ Final Verdict: HIGH POTENTIAL - Recommend interview
 Resume Score: 45/100
 Integrity Score: 40/100 (Keyword stuffing detected)
 Algo Score: 30/100 (Suspicious velocity)
-Oumi Score: 3.2/10 (Generic tutorial project)
+AI Uniqueness Score: 3.2/10 (Generic tutorial project)
 Sentinel Score: 50/100 (Poor code quality)
 Relevance Score: 42/100 (Weak match)
 Final Verdict: LOW POTENTIAL - Review recommended
@@ -51,7 +51,7 @@ Final Verdict: LOW POTENTIAL - Review recommended
 Resume Score: 25/100
 Integrity Score: 30/100 (White text, suspicious metadata)
 Algo Score: 15/100 (Velocity anomalies)
-Oumi Score: 2.1/10 (Tutorial clone)
+AI Uniqueness Score: 2.1/10 (Tutorial clone)
 Sentinel Score: 35/100 (Multiple security issues)
 Relevance Score: 28/100 (Poor match)
 Final Verdict: REJECT - Tutorial spammer detected
