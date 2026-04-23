@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-CandidateAI - Local AI-Powered Candidate Evaluation
+GitVerified - Local AI-Powered Candidate Evaluation
 Main CLI entry point for evaluating candidates
 """
 
@@ -9,6 +10,12 @@ import json
 import os
 import argparse
 from pathlib import Path
+import io
+
+# Fix Windows console encoding for emoji support
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 class CandidateEvaluator:
     """Main evaluation coordinator"""
@@ -19,7 +26,7 @@ class CandidateEvaluator:
     
     def evaluate_candidate(self, resume_path, job_description, github_url=None, leetcode_username=None):
         """Run complete evaluation of a candidate"""
-        print("🚀 Starting CandidateAI Evaluation...")
+        print("🚀 Starting GitVerified Evaluation...")
         print(f"📄 Resume: {resume_path}")
         print(f"💼 Job: {job_description}")
         
@@ -49,9 +56,8 @@ class CandidateEvaluator:
         if github_url:
             print("\n🛡️  Step 2: Code Quality Analysis...")
             try:
-                # For now, we'll use a placeholder - in real usage, this would fetch code
-                code_sample = f"// Code from {github_url} (placeholder for actual analysis)"
-                quality_result = self._scan_code_quality(code_sample)
+                # Pass GitHub URL directly - code_quality agent fetches code itself
+                quality_result = self._scan_code_quality(github_url)
                 self.results["agents"]["code_quality"] = quality_result
                 print(f"   ✅ Code Quality Score: {quality_result.get('score', 'N/A')}/100")
             except Exception as e:
@@ -99,56 +105,56 @@ class CandidateEvaluator:
         return self.results
     
     def _scan_resume_integrity(self, resume_path):
-        """Placeholder integrity scan"""
-        # TODO: Import actual integrity agent
-        return {
-            "agent": "integrity",
-            "score": 7.0,
-            "reasoning": "Resume appears authentic - no hidden text or keyword stuffing detected."
-        }
+        """Resume integrity scan using actual agent"""
+        from agents.integrity import scan_resume_integrity
+        
+        resume_text = self._extract_resume_text(resume_path)
+        return scan_resume_integrity(resume_text=resume_text)
     
-    def _scan_code_quality(self, code_sample):
-        """Placeholder code quality scan"""
-        # TODO: Import actual code quality agent
-        return {
-            "agent": "code_quality",
-            "score": 75,
-            "verdict": "Good",
-            "flags": ["No obvious security issues"]
-        }
+    def _scan_code_quality(self, github_url):
+        """Code quality scan using actual agent"""
+        from agents.code_quality import scan_code_quality
+        
+        return scan_code_quality(github_url=github_url)
     
     def _analyze_project_uniqueness(self, github_url):
-        """Placeholder uniqueness analysis"""
-        # TODO: Import actual uniqueness agent
-        return {
-            "agent": "uniqueness",
-            "score": 6.5,
-            "reasoning": "Project appears to be original work, not a tutorial clone."
-        }
+        """Project uniqueness analysis using actual agent"""
+        from agents.uniqueness import analyze_project_uniqueness
+        
+        return analyze_project_uniqueness(github_url)
     
     def _analyze_algorithm_skills(self, username):
-        """Placeholder skills analysis"""
-        # TODO: Import actual skills agent
-        return {
-            "agent": "skills",
-            "score": 7.0,
-            "reasoning": "Strong algorithmic problem-solving skills demonstrated."
-        }
+        """Technical skills analysis using actual agent"""
+        from agents.problem_solving import evaluate_cp_profile
+        
+        return evaluate_cp_profile(username)
     
     def _evaluate_job_relevance(self, resume_text, job_description):
-        """Placeholder relevance evaluation"""
-        # TODO: Import actual relevance agent
-        return {
-            "agent": "relevance",
-            "score": 7.5,
-            "reasoning": "Candidate's skills align well with job requirements."
-        }
+        """Job relevance evaluation using actual agent"""
+        from agents.relevance import evaluate_job_relevance
+        
+        return evaluate_job_relevance(resume_text, job_description)
     
     def _extract_resume_text(self, resume_path):
-        """Extract text from resume PDF"""
-        # TODO: Implement PDF text extraction
-        # For now, return placeholder text
-        return "Resume text extracted from PDF. Skills include Python, JavaScript, React, Node.js."
+        """Extract text from resume PDF or text file"""
+        from agents.integrity import extract_pdf_text
+        
+        try:
+            # Check if it's a text file first
+            path_obj = Path(resume_path)
+            if path_obj.suffix.lower() in ['.txt', '.md', '.text']:
+                with open(resume_path, 'r', encoding='utf-8') as f:
+                    return f.read()[:5000]
+            
+            # Otherwise try PDF extraction
+            text, error = extract_pdf_text(resume_path)
+            if error:
+                print(f"   ⚠️  PDF extraction failed: {error}")
+                return "Resume text extraction failed. Using empty text."
+            return text
+        except Exception as e:
+            print(f"   ⚠️  Resume extraction failed: {e}")
+            return "Resume text extraction failed. Using empty text."
     
     def _synthesize_results(self):
         """Synthesize all agent results into final evaluation"""
@@ -224,7 +230,7 @@ class CandidateEvaluator:
         print("\n" + "="*60)
 
 def main():
-    parser = argparse.ArgumentParser(description="CandidateAI - Local AI-Powered Candidate Evaluation")
+    parser = argparse.ArgumentParser(description="GitVerified - Local AI-Powered Candidate Evaluation")
     parser.add_argument("resume", help="Path to resume PDF file")
     parser.add_argument("job_desc", help="Path to job description text file or job description string")
     parser.add_argument("--github", help="GitHub repository URL")

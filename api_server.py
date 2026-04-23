@@ -1,5 +1,5 @@
 """
-CandidateAI Local API Server
+GitVerified Local API Server
 Simple HTTP API for resume evaluation with Ollama
 100% Local - No external API tokens required
 """
@@ -34,8 +34,8 @@ batch_state = {
 }
 batch_lock = threading.Lock()
 
-class CandidateAIHandler(BaseHTTPRequestHandler):
-    """Local API handler for CandidateAI"""
+class GitVerifiedHandler(BaseHTTPRequestHandler):
+    """Local API handler for GitVerified"""
     
     def send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -58,7 +58,7 @@ class CandidateAIHandler(BaseHTTPRequestHandler):
             self.wfile.write(b'''
 <!DOCTYPE html>
 <html>
-<head><title>CandidateAI API</title>
+<head><title>GitVerified API</title>
 <style>
 body { font-family: system-ui; padding: 40px; background: #0a0a0a; color: #fff; }
 h1 { color: #10b981; }
@@ -68,7 +68,7 @@ h1 { color: #10b981; }
 </style>
 </head>
 <body>
-<h1>CandidateAI API Server</h1>
+<h1>GitVerified API Server</h1>
 <p class="status">Server is running!</p>
 <p>Local AI-powered candidate evaluation. No API tokens required.</p>
 
@@ -539,7 +539,7 @@ h1 { color: #10b981; }
     def run_evaluation(self, resume_path, job_description, github_url, leetcode_username=None, codeforces_username=None):
         """Run candidate evaluation using local agents + Ollama"""
         print(f"\n{'='*50}")
-        print("Starting CandidateAI Evaluation")
+        print("Starting GitVerified Evaluation")
         print(f"Resume: {resume_path}")
         print(f"Job: {job_description[:50]}..." if job_description else "No job description")
         print(f"{'='*50}\n")
@@ -915,11 +915,11 @@ Respond with ONLY valid JSON: {{"score": 7.0, "reasoning": "match explanation"}}
 
 def run_server(port=3001):
     """Start the API server"""
-    server = HTTPServer(('0.0.0.0', port), CandidateAIHandler)
+    server = HTTPServer(('0.0.0.0', port), GitVerifiedHandler)
     
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
-║           CandidateAI Local API Server                       ║
+║           GitVerified Local API Server                       ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Server running on: http://localhost:{port}                    ║
 ║  Frontend:          http://localhost:3000                    ║
