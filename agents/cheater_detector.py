@@ -57,10 +57,14 @@ def detect_white_text(resume_text: str, raw_pdf_text: Optional[str] = None) -> t
         "react", "node", "tensorflow", "pytorch", "nlp", "computer vision"
     ]
     
+    total_words = max(1, len(text_lower.split()))
     for keyword in keywords:
         count = text_lower.count(keyword.lower())
-        if count > 15:
-            findings.append(f"Keyword '{keyword}' appears {count} times (suspicious)")
+        density = count / total_words
+        # Flag only when density is abnormally high (>3%) AND absolute count >20
+        # A genuine Python dev resume may say "python" 10-15 times legitimately
+        if count > 20 and density > 0.03:
+            findings.append(f"Keyword '{keyword}' appears {count} times ({density:.1%} density — suspicious)")
     
     # Check for text that looks like keyword blocks
     # Pattern: multiple technical terms with only spaces/commas between them
@@ -170,7 +174,8 @@ def detect_impossible_claims(resume_text: str) -> tuple[bool, list[str]]:
         "llm": 2020,
     }
     
-    current_year = 2026 # Updated for accuracy
+    import datetime
+    current_year = datetime.date.today().year
     
     # Pattern: "X years of [tech] experience"
     exp_pattern = r'(\d+)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(\w+(?:\.\w+)?)\s*(?:experience|exp)?'

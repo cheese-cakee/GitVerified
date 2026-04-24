@@ -205,7 +205,7 @@ def apply_weights(
         total_weight += weight
     
     if total_weight > 0:
-        return round(total_score / total_weight * total_weight, 1)
+        return round(total_score, 1)
     return 0.0
 
 

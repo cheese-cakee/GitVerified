@@ -243,17 +243,17 @@ def analyze_project_uniqueness(
             score -= 1.5
             findings.append("Repository is a fork")
         
-        # Stars indicate community validation
+        # Stars indicate community validation (ordered high → low so correct tier fires)
         stars = metadata.get("stars", 0)
-        if stars > 100:
-            score += 1.0
-            findings.append(f"Well-received project ({stars} stars)")
+        if stars > 1000:
+            score += 2.0
+            findings.append(f"Very popular project ({stars} stars)")
         elif stars > 500:
             score += 1.5
             findings.append(f"Popular project ({stars} stars)")
-        elif stars > 1000:
-            score += 2.0
-            findings.append(f"Very popular project ({stars} stars)")
+        elif stars > 100:
+            score += 1.0
+            findings.append(f"Well-received project ({stars} stars)")
         
         # Topics can indicate originality
         topics = metadata.get("topics", [])
