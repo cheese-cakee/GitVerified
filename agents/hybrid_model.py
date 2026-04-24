@@ -6,9 +6,13 @@ Simplified for immediate laptop compatibility
 import os
 import sys
 import json
-import psutil
 import requests
 from typing import Dict, Any
+
+# How long to wait for Ollama to generate a response. 4B models on a slow
+# laptop can take 30-90s; 30s was causing silent timeouts on constrained
+# hardware. Configurable via OLLAMA_TIMEOUT env var (seconds).
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "90"))
 
 class HybridModelClient:
     """Simplified hybrid client: Ollama → Heuristics"""
@@ -42,7 +46,7 @@ class HybridModelClient:
                     "prompt": "test",
                     "stream": False
                 },
-                timeout=5
+                timeout=30  # First model load can be slow; 5s was too tight
             )
             if response.status_code == 200:
                 self.ollama_available = True
@@ -88,7 +92,7 @@ class HybridModelClient:
                             "num_predict": max_tokens
                         }
                     },
-                    timeout=30
+                    timeout=OLLAMA_TIMEOUT
                 )
                 
                 if response.status_code == 200:

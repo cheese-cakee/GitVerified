@@ -452,30 +452,36 @@ h1 { color: #10b981; }
                             'category': 'ERROR'
                         })
             
-            # Sort leaderboard by score
+            # Sort leaderboard by score and snapshot all state under the lock
+            # to avoid a race where a new batch resets current_index to 0
+            # between the lock release and the response write.
             with batch_lock:
                 batch_state['results']['leaderboard'].sort(
-                    key=lambda x: x.get('score', 0), 
+                    key=lambda x: x.get('score', 0),
                     reverse=True
                 )
                 batch_state['is_running'] = False
-                final_results = batch_state['results'].copy()
-            
+                final_results = {
+                    'leaderboard': list(batch_state['results']['leaderboard']),
+                    'eliminated': list(batch_state['results']['eliminated']),
+                    'flagged': list(batch_state['results']['flagged']),
+                }
+                final_processed = batch_state['current_index']  # read inside lock
+
             print(f"\n{'='*50}")
             print(f"Batch complete:")
             print(f"  Leaderboard: {len(final_results['leaderboard'])}")
             print(f"  Eliminated: {len(final_results['eliminated'])}")
             print(f"  Flagged: {len(final_results['flagged'])}")
             print(f"{'='*50}\n")
-            
-            # Send response
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({
                 'status': 'complete',
-                'processed': batch_state['current_index'],
+                'processed': final_processed,
                 'total': len(resumes),
                 'results': final_results
             }).encode())
@@ -898,7 +904,11 @@ Respond with ONLY valid JSON: {{"score": 7.0, "reasoning": "match explanation"}}
         # Get scores from agents
         integrity_score = float(agents.get('integrity', {}).get('score', 5))
         quality_score = float(agents.get('code_quality', {}).get('score', 50))
-        # Normalize code_quality if on 0-100 scale
+        # Normalize code_quality from 0-100 to 0-10.
+        # NOTE: apply_weights() in weight_calculator.py also contains this
+        # normalization, but that function is NOT called from here — weights
+        # are fetched via calculate_weights() and applied inline below.
+        # Do NOT add a second division here; that would produce 0.75 from 7.5.
         if quality_score > 10:
             quality_score = quality_score / 10
         uniqueness_score = float(agents.get('uniqueness', {}).get('score', 5))
@@ -925,8 +935,10 @@ Respond with ONLY valid JSON: {{"score": 7.0, "reasoning": "match explanation"}}
             cp_score * weights.get('cp', 0.10)
         )
         
-        # Check for cheater severity - auto-reject if critical
-        cheater_severity = agents.get('integrity', {}).get('cheater_severity', 'none')
+        # Check for cheater severity - auto-reject if critical.
+        # 'unknown' means the integrity agent errored — treat as 'none' to
+        # avoid penalising candidates for a server-side failure.
+        cheater_severity = agents.get('integrity', {}).get('cheater_severity', 'none') or 'none'
         if cheater_severity == 'critical':
             overall_score = max(0, overall_score - 5)
             recommendation = 'REJECT'
