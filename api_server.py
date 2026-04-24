@@ -795,13 +795,17 @@ h1 { color: #10b981; }
             
         except Exception as e:
             print(f"Integrity agent failed: {e}")
-            # Fallback to basic analysis
+            # Fallback — use 5.0 (neutral) not 7.0 so a crash doesn't hand
+            # free integrity credit to a potentially fraudulent resume.
+            # cheater_severity must be present; synthesize_results() reads it.
             return {
-                'agent': 'integrity', 
-                'score': 7.0, 
-                'reasoning': 'Resume appears authentic (fallback)', 
-                'flags': [], 
-                'backend': 'fallback'
+                'agent': 'integrity',
+                'score': 5.0,
+                'verdict': 'UNKNOWN',
+                'reasoning': f'Integrity agent error — neutral score applied: {e}',
+                'flags': [],
+                'cheater_severity': 'unknown',
+                'backend_used': 'fallback'
             }
     
     def run_code_quality_agent(self, github_url, github_analysis, client, use_ai):
@@ -835,25 +839,47 @@ h1 { color: #10b981; }
             return {'agent': 'uniqueness', 'score': 5.0, 'reasoning': f'Analysis failed: {e}', 'backend': 'fallback'}
     
     def run_relevance_agent(self, resume_text, job_description, client, use_ai):
-        """Run job relevance analysis"""
-        if use_ai and client and job_description:
-            prompt = f"""Does this candidate match the job?
+        """Run job relevance analysis.
+
+        Previously this either called Ollama or returned a hardcoded 7.0,
+        completely ignoring the purpose-built agents/relevance.py module.
+        Now the dedicated heuristic agent always runs first (keyword match,
+        experience years, education, seniority detection). If Ollama is
+        available AND a job description was provided, the AI result is used
+        to refine the score; otherwise the heuristic result stands.
+
+        This also means candidates without a job description no longer
+        receive a free 7.0 — they get a neutral 5.0 from the heuristic
+        agent when there are no keywords to match against.
+        """
+        try:
+            from relevance import evaluate_job_relevance
+            result = evaluate_job_relevance(resume_text, job_description or "")
+            # If Ollama is available, try to refine with AI
+            if use_ai and client and job_description:
+                prompt = f"""Does this candidate match the job?
 Job: {job_description[:400]}
 Resume: {resume_text[:400]}
 Respond with ONLY valid JSON: {{"score": 7.0, "reasoning": "match explanation"}}"""
-            
-            try:
-                response = client.chat(prompt, max_tokens=200)
-                text = response.get('response', '{}')
-                json_match = re.search(r'\{[^}]+\}', text)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    result['agent'] = 'relevance'
-                    return result
-            except Exception as e:
-                print(f"Relevance AI failed: {e}")
-        
-        return {'agent': 'relevance', 'score': 7.0, 'reasoning': 'Candidate appears relevant (heuristic)', 'backend': 'heuristics'}
+                try:
+                    response = client.chat(prompt, max_tokens=200)
+                    text = response.get('response', '{}')
+                    json_match = re.search(r'\{[^}]+\}', text)
+                    if json_match:
+                        ai_result = json.loads(json_match.group())
+                        # Blend: 60% heuristic, 40% AI to stay grounded
+                        blended = round(
+                            result['score'] * 0.6 + float(ai_result.get('score', result['score'])) * 0.4, 1
+                        )
+                        result['score'] = blended
+                        result['reasoning'] = ai_result.get('reasoning', result['reasoning'])
+                        result['backend_used'] = 'heuristics+ollama'
+                except Exception as e:
+                    print(f"Relevance AI refinement failed (using heuristic): {e}")
+            return result
+        except Exception as e:
+            print(f"Relevance agent failed: {e}")
+            return {'agent': 'relevance', 'score': 5.0, 'reasoning': 'Analysis failed — neutral score applied', 'backend_used': 'fallback'}
     
     def run_cp_agent(self, leetcode, codeforces, resume_text, client, use_ai):
         """Run Problem Solving analysis (LeetCode, Codeforces)"""

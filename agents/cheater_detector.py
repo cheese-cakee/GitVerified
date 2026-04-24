@@ -321,7 +321,17 @@ def analyze_for_cheating(
     
     cp_gaming, cp_details = detect_cp_gaming(leetcode_stats, codeforces_stats)
     if cp_gaming:
-        flags.lc_farming = True
+        # detect_cp_gaming covers both LeetCode AND Codeforces patterns.
+        # Previously all results were stored under lc_farming regardless of
+        # which platform triggered the flag. Now we distinguish: if the detail
+        # mentions "LeetCode" we flag lc_farming; if it mentions "Codeforces"
+        # we flag cf_manipulation; both may fire simultaneously.
+        for detail in cp_details:
+            detail_lower = detail.lower()
+            if 'leetcode' in detail_lower:
+                flags.lc_farming = True
+            if 'codeforces' in detail_lower:
+                flags.cf_manipulation = True
         all_details.extend(cp_details)
     
     flags.details = all_details

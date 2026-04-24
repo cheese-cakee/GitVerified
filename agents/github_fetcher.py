@@ -343,11 +343,12 @@ class GitHubFetcher:
                 readme = content
                 break
         
-        # Fetch tree to understand structure
+        # Fetch tree to understand structure — try HEAD, then common branch names
         data, error = self._request(f"/repos/{owner}/{repo}/git/trees/HEAD?recursive=1")
         if error:
-            # Try with default branch
             data, error = self._request(f"/repos/{owner}/{repo}/git/trees/main?recursive=1")
+        if error:
+            data, error = self._request(f"/repos/{owner}/{repo}/git/trees/master?recursive=1")
         
         file_tree = []
         if data and "tree" in data:
@@ -459,11 +460,11 @@ class GitHubFetcher:
                 error="Invalid GitHub URL format"
             )
         
-        # If it's a profile URL, fetch user's repos and analyze top one
+        # If it's a profile URL, fetch user's repos and pick the best non-fork
         if is_profile:
             logger.info("Analyzing GitHub profile", username=owner)
-            repos = self.fetch_user_repos(owner, max_repos=5)
-            
+            repos = self.fetch_user_repos(owner, max_repos=10)
+
             if not repos:
                 return GitHubAnalysis(
                     url=github_url,
@@ -471,11 +472,15 @@ class GitHubFetcher:
                     content=None,
                     error=f"No public repositories found for user {owner}"
                 )
-            
-            # Analyze the top repo
-            top_repo = repos[0]
+
+            # fetch_user_repos already excludes forks, but sort by stars to
+            # pick the candidate's most impressive original work rather than
+            # blindly taking index 0 (which could be a pinned tutorial repo
+            # with inherited stars from the upstream).
+            repos_sorted = sorted(repos, key=lambda r: r.get("stars", 0), reverse=True)
+            top_repo = repos_sorted[0]
             repo = top_repo["name"]
-            logger.info("Using top repo from profile", username=owner, repo=repo, stars=top_repo.get("stars", 0))
+            logger.info("Using top original repo from profile", username=owner, repo=repo, stars=top_repo.get("stars", 0))
         
         logger.info("Analyzing GitHub repository", owner=owner, repo=repo)
         
