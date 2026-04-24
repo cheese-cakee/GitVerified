@@ -75,16 +75,16 @@ class CandidateEvaluator:
                 print(f"   ❌ Uniqueness analysis failed: {e}")
                 self.results["agents"]["uniqueness"] = {"error": str(e), "score": 5}
         
-        # 4. Skills Analysis (LeetCode if available)
+        # 4. Competitive Programming / Skills Analysis (LeetCode if available)
         if leetcode_username:
             print("\n💪 Step 4: Technical Skills Analysis...")
             try:
                 skills_result = self._analyze_algorithm_skills(leetcode_username)
-                self.results["agents"]["skills"] = skills_result
+                self.results["agents"]["cp"] = skills_result
                 print(f"   ✅ Skills Score: {skills_result.get('score', 'N/A')}/10")
             except Exception as e:
                 print(f"   ❌ Skills analysis failed: {e}")
-                self.results["agents"]["skills"] = {"error": str(e), "score": 5}
+                self.results["agents"]["cp"] = {"error": str(e), "score": 5}
         
         # 5. Job Relevance Analysis
         print("\n🎯 Step 5: Job Relevance Analysis...")
@@ -157,33 +157,38 @@ class CandidateEvaluator:
             return "Resume text extraction failed. Using empty text."
     
     def _synthesize_results(self):
-        """Synthesize all agent results into final evaluation"""
+        """Synthesize all agent results into final evaluation.
+
+        Uses weight_calculator.calculate_weights() so weights are dynamically
+        determined from the job description — same logic as api_server.py.
+        The score_breakdown key for LeetCode/CP is 'cp' (not 'skills') to
+        match the shape produced by api_server.py's synthesize_results().
+        """
+        from agents.weight_calculator import calculate_weights, apply_weights
+
         agents = self.results["agents"]
-        
-        # Extract scores with defaults
-        integrity_score = agents.get("integrity", {}).get("score", 0)
-        quality_score = agents.get("code_quality", {}).get("score", 50) / 10  # Convert to 0-10 scale
+        job_description = self.results["candidate"].get("job_description", "")
+
+        # Extract scores with defaults (code_quality is on 0-100 scale)
+        integrity_score  = agents.get("integrity", {}).get("score", 0)
+        quality_score    = agents.get("code_quality", {}).get("score", 50) / 10  # → 0-10
         uniqueness_score = agents.get("uniqueness", {}).get("score", 5)
-        skills_score = agents.get("skills", {}).get("score", 5)
-        relevance_score = agents.get("relevance", {}).get("score", 5)
-        
-        # Calculate weighted average
-        weights = {
-            "integrity": 0.20,
-            "quality": 0.30, 
-            "uniqueness": 0.30,
-            "skills": 0.10,
-            "relevance": 0.10
+        cp_score         = agents.get("cp", {}).get("score", 5)
+        relevance_score  = agents.get("relevance", {}).get("score", 5)
+
+        # Dynamic weights from job description (matches api_server.py behaviour)
+        weight_info = calculate_weights(job_description)
+        weights = weight_info["weights"]  # keys: integrity, code_quality, uniqueness, relevance, cp
+
+        agent_scores = {
+            "integrity":    integrity_score,
+            "code_quality": quality_score,
+            "uniqueness":   uniqueness_score,
+            "cp":           cp_score,
+            "relevance":    relevance_score,
         }
-        
-        overall_score = (
-            integrity_score * weights["integrity"] +
-            quality_score * weights["quality"] +
-            uniqueness_score * weights["uniqueness"] +
-            skills_score * weights["skills"] +
-            relevance_score * weights["relevance"]
-        )
-        
+        overall_score = apply_weights(agent_scores, weights)
+
         # Generate recommendation
         if overall_score >= 7.0 and integrity_score >= 6.0:
             recommendation = "PASS"
@@ -194,18 +199,20 @@ class CandidateEvaluator:
         else:
             recommendation = "REJECT"
             reasoning = f"Does not meet standards with overall score of {overall_score:.1f}/10"
-        
+
         self.results["final"] = {
             "overall_score": round(overall_score, 1),
             "recommendation": recommendation,
             "reasoning": reasoning,
             "score_breakdown": {
-                "integrity": integrity_score,
-                "code_quality": quality_score,
-                "uniqueness": uniqueness_score,
-                "skills": skills_score,
-                "relevance": relevance_score
-            }
+                "integrity":    round(integrity_score, 1),
+                "code_quality": round(quality_score, 1),
+                "uniqueness":   round(uniqueness_score, 1),
+                "cp":           round(cp_score, 1),
+                "relevance":    round(relevance_score, 1),
+            },
+            "weights_used": weights,
+            "job_type_detected": weight_info.get("job_type", "general"),
         }
     
     def print_results(self):
@@ -221,11 +228,13 @@ class CandidateEvaluator:
         
         print("\n📈 Score Breakdown:")
         breakdown = final["score_breakdown"]
-        print(f"   🛡️  Integrity: {breakdown['integrity']}/10")
+        print(f"   🛡️  Integrity:    {breakdown['integrity']}/10")
         print(f"   💻 Code Quality: {breakdown['code_quality']}/10")
-        print(f"   🎨 Uniqueness: {breakdown['uniqueness']}/10")
-        print(f"   💪 Skills: {breakdown['skills']}/10")
-        print(f"   🎯 Relevance: {breakdown['relevance']}/10")
+        print(f"   🎨 Uniqueness:   {breakdown['uniqueness']}/10")
+        print(f"   💪 CP / Skills:  {breakdown['cp']}/10")
+        print(f"   🎯 Relevance:    {breakdown['relevance']}/10")
+        if "job_type_detected" in final:
+            print(f"\n   🔎 Job Type: {final['job_type_detected']}")
         
         print("\n" + "="*60)
 
