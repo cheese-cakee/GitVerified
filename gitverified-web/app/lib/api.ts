@@ -33,7 +33,10 @@ export interface EvaluationResult {
             code_quality: number;
             uniqueness: number;
             relevance: number;
+            cp: number;
         };
+        weights_used?: Record<string, number>;
+        job_type_detected?: string;
     };
 }
 
@@ -111,16 +114,31 @@ export async function getLeaderboardData(): Promise<Candidate[]> {
         
         const data = await res.json();
         
-        return data.map((item: any) => ({
+        type LeaderboardItem = {
+            id: string;
+            name: string;
+            overall_score?: number;
+            status: string;
+            date?: string;
+            details?: {
+                integrity?: number;
+                relevance?: number;
+                quality?: number;
+                cp?: number;
+            };
+            tags?: string[];
+        };
+
+        return (data as LeaderboardItem[]).map((item) => ({
             id: item.id,
             name: item.name,
             p_score: Math.round((item.overall_score || 0) * 10),
             truth: Math.round((item.details?.integrity || 0) * 10),
-            passion: Math.round((item.details?.relevance || 0) * 10), // Mapping relevance -> passion
+            passion: Math.round((item.details?.relevance || 0) * 10), // relevance → passion
             code: Math.round((item.details?.quality || 0) * 10),
             status: item.status,
-            flag: item.skills ? item.skills[0] : "Candidate",
-            date: item.date
+            flag: item.tags?.[0] ?? "Candidate",
+            date: item.date,
         }));
     } catch (error) {
         console.error("Failed to fetch leaderboard:", error);
