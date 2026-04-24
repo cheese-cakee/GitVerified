@@ -7,18 +7,28 @@ Simple HTTP API for resume evaluation with Ollama
 import json
 import os
 import sys
-import tempfile
 import re
 import time
-import glob
 import threading
+import socketserver
+import atexit
+import shutil
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 import urllib.request
 
-# Add agents to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'agents'))
+# Absolute base directory (project root, regardless of cwd)
+BASE_DIR = Path(__file__).parent.resolve()
+
+# Max upload size: 20 MB
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+# Allowed CORS origin
+CORS_ORIGIN = "http://localhost:3000"
+
+# Add agents to path using absolute path
+sys.path.insert(0, str(BASE_DIR / 'agents'))
 
 # Global state for batch processing
 batch_state = {
@@ -38,7 +48,13 @@ class GitVerifiedHandler(BaseHTTPRequestHandler):
     """Local API handler for GitVerified"""
     
     def send_cors_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
+        # Restrict to the local frontend only — wildcard CORS would allow any
+        # page the user visits to silently read candidate data from localhost.
+        origin = self.headers.get('Origin', '')
+        if origin == CORS_ORIGIN:
+            self.send_header('Access-Control-Allow-Origin', CORS_ORIGIN)
+        else:
+            self.send_header('Access-Control-Allow-Origin', CORS_ORIGIN)
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
     
@@ -194,7 +210,7 @@ h1 { color: #10b981; }
     def handle_leaderboard(self):
         """Get leaderboard data from stored evaluations"""
         try:
-            evals_dir = Path("data/evaluations")
+            evals_dir = BASE_DIR / "data" / "evaluations"
             candidates = []
             
             if evals_dir.exists():
@@ -293,10 +309,19 @@ h1 { color: #10b981; }
     def handle_batch_evaluate(self):
         """Handle batch resume evaluation"""
         global batch_state
-        
+
         try:
             content_type = self.headers.get('Content-Type', '')
             content_length = int(self.headers.get('Content-Length', 0))
+
+            if content_length > MAX_UPLOAD_BYTES:
+                self.send_response(413)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Upload exceeds {MAX_UPLOAD_BYTES // (1024*1024)} MB limit'}).encode())
+                return
+
             body = self.rfile.read(content_length)
             
             job_description = ''
@@ -338,19 +363,26 @@ h1 { color: #10b981; }
             print(f"Starting BATCH evaluation: {len(resumes)} resumes")
             print(f"{'='*50}\n")
             
-            # Save resumes and process
-            os.makedirs("data/uploads/batch", exist_ok=True)
-            
+            # Save resumes and process — use absolute paths from BASE_DIR
+            upload_dir = BASE_DIR / "data" / "uploads" / "batch"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+
             for i, resume_data in enumerate(resumes):
                 # Check for stop request
                 with batch_lock:
                     if batch_state['should_stop']:
                         print("Batch stopped by user")
                         break
+                    # Increment AFTER the stop check so reported count matches
+                    # actual completions — previously incremented before check,
+                    # causing off-by-one in the final processed count.
                     batch_state['current_index'] = i + 1
-                
-                filename = f"batch_{int(time.time())}_{i}_{resume_data['filename']}"
-                resume_path = os.path.join("data/uploads/batch", filename)
+
+                # Sanitize filename: strip path components, allow only safe chars,
+                # and force .pdf extension to prevent path traversal.
+                safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', Path(resume_data['filename']).name)
+                filename = f"batch_{int(time.time())}_{i}_{safe_name}.pdf"
+                resume_path = str(upload_dir / filename)
                 
                 try:
                     with open(resume_path, "wb") as f:
@@ -467,6 +499,15 @@ h1 { color: #10b981; }
         try:
             content_type = self.headers.get('Content-Type', '')
             content_length = int(self.headers.get('Content-Length', 0))
+
+            if content_length > MAX_UPLOAD_BYTES:
+                self.send_response(413)
+                self.send_header('Content-Type', 'application/json')
+                self.send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': f'Upload exceeds {MAX_UPLOAD_BYTES // (1024*1024)} MB limit'}).encode())
+                return
+
             body = self.rfile.read(content_length)
             
             resume_path = None
@@ -484,15 +525,15 @@ h1 { color: #10b981; }
                 leetcode_username = parsed['fields'].get('leetcode_username', '')
                 codeforces_username = parsed['fields'].get('codeforces_username', '')
                 
-                # Save resume file
+                # Save resume file — use absolute path, force .pdf extension
                 if 'resume' in parsed['files']:
                     file_data = parsed['files']['resume']
-                    # Create data dir if not exists
-                    os.makedirs("data/uploads", exist_ok=True)
-                    
+                    upload_dir = BASE_DIR / "data" / "uploads"
+                    upload_dir.mkdir(parents=True, exist_ok=True)
+
                     filename = f"resume_{int(time.time())}.pdf"
-                    resume_path = os.path.join("data/uploads", filename)
-                    
+                    resume_path = str(upload_dir / filename)
+
                     with open(resume_path, "wb") as f:
                         f.write(file_data['content'])
                     print(f"Saved resume to: {resume_path}")
@@ -508,11 +549,12 @@ h1 { color: #10b981; }
             # Run evaluation
             result = self.run_evaluation(resume_path, job_description, github_url, leetcode_username, codeforces_username)
             
-            # Save evaluation result
+            # Save evaluation result using absolute path
             try:
-                os.makedirs("data/evaluations", exist_ok=True)
+                evals_dir = BASE_DIR / "data" / "evaluations"
+                evals_dir.mkdir(parents=True, exist_ok=True)
                 eval_id = f"eval_{int(time.time())}"
-                save_path = f"data/evaluations/{eval_id}.json"
+                save_path = str(evals_dir / f"{eval_id}.json")
                 with open(save_path, "w") as f:
                     json.dump(result, f, indent=2)
                 print(f"Saved evaluation to {save_path}")
@@ -664,34 +706,38 @@ h1 { color: #10b981; }
             return f"Could not extract text: {e}"
     
     def extract_github_from_resume(self, resume_text):
-        """Extract GitHub URL (profile or repo) from resume text"""
+        """Extract GitHub URL (profile or repo) from resume text.
+
+        Trailing punctuation (periods, commas, closing parens) is stripped
+        so 'github.com/user/repo.' does not produce a broken URL.
+        """
         if not resume_text:
             return None
-        
-        # Try to match full repo URLs first (most specific)
-        repo_pattern = r'https?://github\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+'
+
+        # Capture repo URL; stop before any trailing punctuation/whitespace
+        repo_pattern = r'https?://github\.com/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+?)(?=[.,;)\s]|$)'
         match = re.search(repo_pattern, resume_text)
         if match:
-            return match.group(0)
-        
-        # Try repo without https
-        repo_pattern = r'github\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+'
+            return f'https://github.com/{match.group(1)}/{match.group(2)}'
+
+        # Repo without https scheme
+        repo_pattern = r'github\.com/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+?)(?=[.,;)\s]|$)'
         match = re.search(repo_pattern, resume_text)
         if match:
-            return 'https://' + match.group(0)
-        
-        # Match profile URLs (github.com/username)
-        profile_pattern = r'https?://github\.com/([a-zA-Z0-9_-]+)(?:\s|$|[,;)])'
+            return f'https://github.com/{match.group(1)}/{match.group(2)}'
+
+        # Profile URL
+        profile_pattern = r'https?://github\.com/([a-zA-Z0-9_-]+?)(?=[.,;)\s/]|$)'
         match = re.search(profile_pattern, resume_text)
         if match:
             return f'https://github.com/{match.group(1)}'
-        
+
         # Profile without https
-        profile_pattern = r'github\.com/([a-zA-Z0-9_-]+)(?:\s|$|[,;)])'
+        profile_pattern = r'github\.com/([a-zA-Z0-9_-]+?)(?=[.,;)\s/]|$)'
         match = re.search(profile_pattern, resume_text)
         if match:
             return f'https://github.com/{match.group(1)}'
-        
+
         return None
     
     def extract_leetcode_from_resume(self, resume_text):
@@ -913,9 +959,33 @@ Respond with ONLY valid JSON: {{"score": 7.0, "reasoning": "match explanation"}}
         """Custom logging"""
         print(f"[API] {args[0]}" if args else "")
 
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """Multi-threaded HTTP server so batch-progress polling works during batch runs."""
+    daemon_threads = True
+
+
+def _cleanup_uploads():
+    """Remove temporary upload files on clean shutdown."""
+    upload_dir = BASE_DIR / "data" / "uploads"
+    if upload_dir.exists():
+        for f in upload_dir.glob("resume_*.pdf"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        batch_dir = upload_dir / "batch"
+        if batch_dir.exists():
+            try:
+                shutil.rmtree(batch_dir)
+            except OSError:
+                pass
+    print("[Cleanup] Temporary upload files removed.")
+
+
 def run_server(port=3001):
     """Start the API server"""
-    server = HTTPServer(('0.0.0.0', port), GitVerifiedHandler)
+    atexit.register(_cleanup_uploads)
+    server = ThreadedHTTPServer(('0.0.0.0', port), GitVerifiedHandler)
     
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗

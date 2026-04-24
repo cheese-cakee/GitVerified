@@ -5,6 +5,7 @@ Fetches repository metadata and code content via GitHub API.
 Designed for lightweight operation with rate limit awareness.
 """
 
+import os
 import re
 import time
 import json
@@ -513,10 +514,27 @@ _fetcher: Optional[GitHubFetcher] = None
 
 
 def get_fetcher(token: Optional[str] = None) -> GitHubFetcher:
-    """Get or create the GitHub fetcher singleton."""
+    """Get or create the GitHub fetcher singleton.
+
+    Token resolution order:
+    1. Explicit argument
+    2. GITHUB_TOKEN environment variable
+    3. Unauthenticated (60 req/hour — will fail fast on batch runs)
+
+    The singleton is recreated when a token is supplied that differs from
+    the current one, so adding a token at runtime takes effect.
+    """
     global _fetcher
-    if _fetcher is None:
-        _fetcher = GitHubFetcher(token)
+    resolved_token = token or os.environ.get("GITHUB_TOKEN")
+    if _fetcher is None or (resolved_token and getattr(_fetcher, 'token', None) != resolved_token):
+        _fetcher = GitHubFetcher(resolved_token)
+        if resolved_token:
+            logger.info("GitHub fetcher initialised with authenticated token")
+        else:
+            logger.warning(
+                "No GITHUB_TOKEN found — unauthenticated requests limited to "
+                "60/hour. Set GITHUB_TOKEN in your environment for batch use."
+            )
     return _fetcher
 
 
