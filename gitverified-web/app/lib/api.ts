@@ -46,10 +46,14 @@ export interface SystemStatus {
 
 /**
  * Check system status (backend, Ollama)
+ *
+ * Uses the Next.js proxy route (/api/status) instead of calling
+ * http://localhost:3001 directly. Direct calls break in any environment
+ * other than the developer's own machine (Vercel, Docker, different port).
  */
 export async function getSystemStatus(): Promise<SystemStatus> {
     try {
-        const res = await fetch('http://localhost:3001/api/status');
+        const res = await fetch('/api/status');
         if (res.ok) {
             return await res.json();
         }
@@ -61,6 +65,9 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 
 /**
  * Evaluate a candidate resume
+ *
+ * Routes through /api/evaluate (Next.js proxy) instead of localhost:3001
+ * directly so this works in any deployment environment.
  */
 export async function evaluateCandidate(
     resumeFile: File,
@@ -76,7 +83,7 @@ export async function evaluateCandidate(
     if (leetcodeUsername) formData.append('leetcode_username', leetcodeUsername);
     if (codeforcesUsername) formData.append('codeforces_username', codeforcesUsername);
 
-    const res = await fetch('http://localhost:3001/api/evaluate', {
+    const res = await fetch('/api/evaluate', {
         method: 'POST',
         body: formData,
     });
@@ -90,12 +97,14 @@ export async function evaluateCandidate(
 }
 
 /**
- * Get leaderboard data (from Python API)
+ * Get leaderboard data via Next.js proxy route.
+ * Previously called http://localhost:3001/api/leaderboard directly, which
+ * fails in any non-localhost environment (Vercel, Docker, CI).
  */
 export async function getLeaderboardData(): Promise<Candidate[]> {
     try {
-        const res = await fetch('http://localhost:3001/api/leaderboard', {
-            next: { revalidate: 10 } // Cache for 10 seconds
+        const res = await fetch('/api/leaderboard', {
+            next: { revalidate: 10 }
         });
         
         if (!res.ok) return [];
