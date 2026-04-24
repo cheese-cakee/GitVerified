@@ -87,28 +87,39 @@ export default function MainEngine() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setUploadedFiles(Array.from(files));
-      setMode(files.length > 1 ? 'batch' : 'single');
-      setConsoleOutput([]);
-      setIsComplete(false);
-      setIsEvaluating(false);
-      setEvaluationResult(null);
-      setSteps(s => s.map(step => ({ ...step, status: 'pending' })));
+      resetState(Array.from(files));
     }
   };
+
+  const resetState = useCallback((files: File[]) => {
+    // Central reset — used by both handleFileUpload and handleDrop so every
+    // field is consistently cleared.  Previously handleDrop omitted
+    // isEvaluating, leaving the button disabled and the "Analyzing..." label
+    // stuck if files were dropped mid-evaluation.
+    const validFiles = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (validFiles.length === 0) return;
+    setUploadedFiles(validFiles);
+    setMode(validFiles.length > 1 ? 'batch' : 'single');
+    setConsoleOutput([]);
+    setIsComplete(false);
+    setIsEvaluating(false);   // was missing from handleDrop
+    setEvaluationResult(null);
+    setBatchProgress(0);      // reset stale batch progress from previous run
+    setBatchTotal(0);
+    setBatchResults(null);
+    setSteps(s => s.map(step => ({ ...step, status: 'pending' })));
+    if (validFiles.length < files.length) {
+      console.warn(`Dropped ${files.length - validFiles.length} non-PDF file(s) — ignored.`);
+    }
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      setUploadedFiles(Array.from(files));
-      setMode(files.length > 1 ? 'batch' : 'single');
-      setConsoleOutput([]);
-      setIsComplete(false);
-      setEvaluationResult(null);
-      setSteps(s => s.map(step => ({ ...step, status: 'pending' })));
+      resetState(Array.from(files));
     }
-  }, []);
+  }, [resetState]);
 
   const runAnalysis = async () => {
     if (uploadedFiles.length === 0) return;
@@ -127,18 +138,20 @@ export default function MainEngine() {
   };
 
   const runSingleAnalysis = async () => {
-    const stepOrder = ['integrity', 'code_quality', 'uniqueness', 'relevance', 'synthesis'];
-    
-    for (let i = 0; i < stepOrder.length - 1; i++) {
-      setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s));
-      setConsoleOutput(prev => [...prev, `> Running ${steps[i].label}...`]);
-      await new Promise(r => setTimeout(r, 800));
-      setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'pass' } : s));
-    }
+    // Previously, the first 4 steps (integrity, code_quality, uniqueness,
+    // relevance) were faked — each step was marked "pass" after an 800ms
+    // setTimeout with no API call. Only the final "synthesis" step made a
+    // real request. This meant the checkmarks had zero informational value
+    // and did not reflect actual agent execution.
+    //
+    // Now: we make ONE real API call to /api/evaluate, then map the agent
+    // results from the response back to the step indicators. The step panel
+    // shows "running" for all while the request is in flight, then reflects
+    // the actual per-agent outcome (pass if score > 0, failed if error).
 
-    // Final synthesis - call actual API
-    setSteps(prev => prev.map((s) => s.id === 'synthesis' ? { ...s, status: 'running' } : s));
-    setConsoleOutput(prev => [...prev, `> Calling Ollama for final synthesis...`]);
+    // Mark all steps as running while the request is in-flight
+    setSteps(prev => prev.map(s => ({ ...s, status: 'running' })));
+    setConsoleOutput(prev => [...prev, `> Sending to backend for full evaluation...`]);
 
     try {
       const formData = new FormData();
@@ -154,16 +167,50 @@ export default function MainEngine() {
       if (response.ok) {
         const result = await response.json();
         setEvaluationResult(result);
-        setSteps(prev => prev.map((s) => s.id === 'synthesis' ? { ...s, status: 'pass' } : s));
-        setConsoleOutput(prev => [...prev, `> Analysis Complete. Score: ${result.final?.overall_score || 'N/A'}/10`]);
+
+        // Map real agent results to step statuses
+        const agentStepMap: Record<string, string> = {
+          integrity: 'integrity',
+          code_quality: 'code_quality',
+          uniqueness: 'uniqueness',
+          relevance: 'relevance',
+        };
+        setSteps(prev => prev.map(step => {
+          if (step.id === 'synthesis') {
+            return { ...step, status: 'pass' };
+          }
+          const agentKey = agentStepMap[step.id];
+          if (agentKey) {
+            const agentData = result.agents?.[agentKey];
+            const hadError = agentData?.error || agentData?.score === 0;
+            return { ...step, status: hadError ? 'failed' : 'pass' };
+          }
+          return { ...step, status: 'pass' };
+        }));
+
+        const breakdown = result.final?.score_breakdown;
+        if (breakdown) {
+          setConsoleOutput(prev => [
+            ...prev,
+            `> Integrity:     ${breakdown.integrity}/10`,
+            `> Code Quality:  ${breakdown.code_quality}/10`,
+            `> Uniqueness:    ${breakdown.uniqueness}/10`,
+            `> Relevance:     ${breakdown.relevance}/10`,
+            `> Problem Solving: ${breakdown.cp || 0}/10`,
+            `> ─────────────────────────────`,
+            `> Final Score: ${result.final?.overall_score}/10 → ${result.final?.recommendation}`,
+          ]);
+        } else {
+          setConsoleOutput(prev => [...prev, `> Analysis Complete. Score: ${result.final?.overall_score || 'N/A'}/10`]);
+        }
       } else {
-        const error = await response.json();
-        setSteps(prev => prev.map((s) => s.id === 'synthesis' ? { ...s, status: 'failed' } : s));
-        setConsoleOutput(prev => [...prev, `> ERROR: ${error.message || 'Backend not available'}`]);
+        const error = await response.json().catch(() => ({}));
+        setSteps(prev => prev.map(s => ({ ...s, status: 'failed' })));
+        setConsoleOutput(prev => [...prev, `> ERROR: ${error.message || error.error || 'Backend not available'}`]);
       }
-    } catch (error) {
-      setSteps(prev => prev.map((s) => s.id === 'synthesis' ? { ...s, status: 'failed' } : s));
-      setConsoleOutput(prev => [...prev, `> ERROR: Make sure backend is running (python api_server.py)`]);
+    } catch {
+      setSteps(prev => prev.map(s => ({ ...s, status: 'failed' })));
+      setConsoleOutput(prev => [...prev, `> ERROR: Cannot reach backend. Is python api_server.py running?`]);
     }
 
     setIsEvaluating(false);
@@ -337,18 +384,27 @@ export default function MainEngine() {
              {/* System Status */}
              <div className="glass-card rounded-xl p-4 border-white/10">
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">System Status</div>
+                {/* Show skeleton indicators while the initial status fetch is in-flight.
+                    Previously systemStatus was null until the fetch resolved, rendering
+                    nothing — users saw blank status with no indication of loading. */}
                 <div className="space-y-2 pt-2">
                    <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-500">Python Backend</span>
-                      <span className={systemStatus?.backend ? 'text-green-400' : 'text-red-400'}>
-                        {systemStatus?.backend ? '● Online' : '○ Offline'}
-                      </span>
+                      {systemStatus === null
+                        ? <span className="text-gray-500 animate-pulse">○ Checking…</span>
+                        : <span className={systemStatus.backend ? 'text-green-400' : 'text-red-400'}>
+                            {systemStatus.backend ? '● Online' : '○ Offline'}
+                          </span>
+                      }
                    </div>
                    <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-500">Ollama AI</span>
-                      <span className={systemStatus?.ollama ? 'text-green-400' : 'text-red-400'}>
-                        {systemStatus?.ollama ? '● Online' : '○ Offline'}
-                      </span>
+                      {systemStatus === null
+                        ? <span className="text-gray-500 animate-pulse">○ Checking…</span>
+                        : <span className={systemStatus.ollama ? 'text-green-400' : 'text-red-400'}>
+                            {systemStatus.ollama ? '● Online' : '○ Offline'}
+                          </span>
+                      }
                    </div>
                 </div>
                 <button 
@@ -525,8 +581,10 @@ export default function MainEngine() {
                                       'border-red-500/20 bg-red-900/10'
                                     }`}>
                                         <div className="flex items-center gap-4 mb-4">
-                                            <div className={`w-14 h-14 rounded-full ${getScoreColor(evaluationResult.final.overall_score)} text-black flex items-center justify-center font-bold text-xl`}>
-                                              {Math.round(evaluationResult.final.overall_score * 10)}
+                                            <div className={`w-14 h-14 rounded-full ${getScoreColor(evaluationResult.final.overall_score)} text-black flex items-center justify-center font-bold text-lg`}>
+                                              {/* Display the actual /10 score, not score*10 which was
+                                                  showing 75 in the circle while the label said 7.5/10 */}
+                                              {evaluationResult.final.overall_score}
                                             </div>
                                             <div>
                                                 <h3 className="text-xl font-bold text-white">
